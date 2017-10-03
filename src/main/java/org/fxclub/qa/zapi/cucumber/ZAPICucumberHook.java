@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Created by majer-dy on 17/02/2017.
@@ -98,8 +99,10 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                     ProjectInfo projectInfo = zapiClient.getProjectInfo(testCase);
                     ProjectVersions projectVersions = zapiClient.getVersions(projectInfo);
 
-                    ProjectVersion projectVersion = projectVersions.getUnreleasedVersions().stream()
-                            .filter(version -> version.getLabel().equalsIgnoreCase(versionDetector.getVersion()))
+                    ProjectVersion projectVersion = Stream.concat(
+                            projectVersions.getReleasedVersions().stream(),
+                            projectVersions.getUnreleasedVersions().stream()
+                    ).filter(version -> version.getLabel().equalsIgnoreCase(versionDetector.getVersion()))
                             .findFirst()
                             .orElse(projectVersions.getUnreleasedVersions().get(0));
 
@@ -108,6 +111,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                             projectInfo,
                             projectVersion
                     );
+
                     zapiClient.addTestsToCycle(testCycle, testCase);
                     zapiClient.udpateExecutionStatus(testCycle, testCase, this.currentStatus);
                 }
