@@ -1,4 +1,4 @@
-package org.fxclub.qa.zapi;
+package org.fxclub.qa.zapi.core;
 
 /**
  * Created by majer-dy on 17/02/2017.

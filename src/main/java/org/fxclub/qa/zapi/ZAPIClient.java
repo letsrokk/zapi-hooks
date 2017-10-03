@@ -5,6 +5,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import org.fxclub.qa.zapi.core.*;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -52,6 +53,7 @@ public class ZAPIClient {
     private String jiraUrl;
     private String username;
     private String password;
+
     private RequestSpecification spec;
 
     public ZAPIClient(){
@@ -60,6 +62,7 @@ public class ZAPIClient {
             jiraUrl += "/";
         username = Optional.ofNullable(System.getenv("ZAPI_JIRA_USERNAME")).orElse("jirauser");
         password = Optional.ofNullable(System.getenv("ZAPI_JIRA_PASSWORD")).orElse("jirapassword");
+
         spec = RestAssured.given().contentType(ContentType.JSON).auth().preemptive().basic(username, password);
     }
 
@@ -227,8 +230,6 @@ public class ZAPIClient {
 
     public Execution udpateExecutionStatus(TestCycle testCycle, TestCase testCase, String currentStatus) {
         Execution execution = getExecution(testCycle, testCase);
-
-
         execution = udpatedExecutionStatus(execution, getStatusId(currentStatus));
         return execution;
     }

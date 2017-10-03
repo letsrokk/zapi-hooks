@@ -1,4 +1,4 @@
-package org.fxclub.qa.zapi;
+package org.fxclub.qa.zapi.core;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 
