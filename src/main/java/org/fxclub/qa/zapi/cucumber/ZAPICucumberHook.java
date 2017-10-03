@@ -5,6 +5,7 @@ import gherkin.formatter.Reporter;
 import gherkin.formatter.model.*;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.fxclub.qa.zapi.*;
+import org.fxclub.qa.zapi.core.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +27,18 @@ public class ZAPICucumberHook implements Formatter, Reporter {
     private Feature currentFeature;
     private String currentStatus;
 
-    private static final String ZAPI_CYCLE_NAME_DEFAULT = "CUCUMBER";
+    private VersionDetector versionDetector;
+    private final String ZAPI_CYCLE_NAME_DEFAULT = "CUCUMBER";
+
+    public ZAPICucumberHook(){
+        try {
+            versionDetector = (VersionDetector) Class.forName(
+                    System.getProperty("ZAPI_VERSION_DETECTOR","org.fxclub.qa.zapi.core.DefaultVersionDetector")
+            ).newInstance();
+        }catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex){
+            versionDetector = new DefaultVersionDetector();
+        }
+    }
 
     @Override
     public void syntaxError(String s, String s1, List<String> list, String s2, Integer integer) {
@@ -85,12 +97,16 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                     TestCase testCase = new TestCase(testCaseId);
                     ProjectInfo projectInfo = zapiClient.getProjectInfo(testCase);
                     ProjectVersions projectVersions = zapiClient.getVersions(projectInfo);
+
+                    ProjectVersion projectVersion = projectVersions.getUnreleasedVersions().stream()
+                            .filter(version -> version.getLabel().equalsIgnoreCase(versionDetector.getVersion()))
+                            .findFirst()
+                            .orElse(projectVersions.getUnreleasedVersions().get(0));
+
                     TestCycle testCycle = zapiClient.getOrCreateTestCycle(
                             Optional.ofNullable(currentFeature.getName()).orElse(ZAPI_CYCLE_NAME_DEFAULT),
                             projectInfo,
-                            projectVersions.getUnreleasedVersions().size() > 1
-                                    ? projectVersions.getUnreleasedVersions().get(1)
-                                    : projectVersions.getUnreleasedVersions().get(0)
+                            projectVersion
                     );
                     zapiClient.addTestsToCycle(testCycle, testCase);
                     zapiClient.udpateExecutionStatus(testCycle, testCase, this.currentStatus);
