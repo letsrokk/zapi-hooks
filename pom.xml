@@ -6,7 +6,7 @@
 
     <groupId>org.fxclub.qa</groupId>
     <artifactId>zapi-hooks</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.0.2</version>
 
     <properties>
         <project.jdk.version>1.8</project.jdk.version>
