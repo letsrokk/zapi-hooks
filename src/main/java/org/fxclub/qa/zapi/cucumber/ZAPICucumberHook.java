@@ -10,13 +10,9 @@ import org.fxclub.qa.zapi.core.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -25,6 +21,8 @@ import java.util.stream.Stream;
 public class ZAPICucumberHook implements Formatter, Reporter {
 
     private Logger logger = LoggerFactory.getLogger(ZAPICucumberHook.class);
+
+    private static ZapiFileLock zapiLock = new ZapiFileLock("cucumber-zapi");
 
     private ZAPIClient zapiClient = new ZAPIClient();
     private VersionDetector versionDetector;
@@ -171,55 +169,67 @@ public class ZAPICucumberHook implements Formatter, Reporter {
     }
 
     private synchronized TestCycle getTestCycle(ProjectInfo projectInfo, ProjectVersion projectVersion){
-        return testCyclesMap.computeIfAbsent(
-                currentFeature.getName(),
-                feature -> {
-                    String testCycleName = Optional.ofNullable(feature).orElse(ZAPI_CYCLE_NAME_DEFAULT);
-                    logger.debug(String.format("Zephyr: create test cycle with name \"%s\"", testCycleName));
+        try{
+            zapiLock.lock();
 
-                    TestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
-                    if(testCycle == null){
-                        testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
-                    } else {
-                        logger.debug("Zephyr: delete existing test cycle " + testCycle.toString());
-                        zapiClient.deleteTestCycle(testCycle);
+            return testCyclesMap.computeIfAbsent(
+                    currentFeature.getName(),
+                    feature -> {
+                        String testCycleName = Optional.ofNullable(feature).orElse(ZAPI_CYCLE_NAME_DEFAULT);
+                        logger.debug(String.format("Zephyr: create test cycle with name \"%s\"", testCycleName));
 
-                        testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                        TestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
+                        if(testCycle == null){
+                            testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                        } else {
+                            logger.debug("Zephyr: delete existing test cycle " + testCycle.toString());
+                            zapiClient.deleteTestCycle(testCycle);
+
+                            testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                        }
+                        logger.debug("Zephyr: created new test cycle " + testCycle.toString());
+
+                        return testCycle;
                     }
-                    logger.debug("Zephyr: created new test cycle " + testCycle.toString());
-
-                    return testCycle;
-                }
-        );
+            );
+        }finally {
+            zapiLock.unlock();
+        }
     }
 
     private synchronized Execution udpateExecutionStatus(TestCycle testCycle, TestCase testCase, String currentStatus) {
-        String currentStatusId = getZephyrStatusId(currentStatus);
+        try{
+            zapiLock.lock();
 
-        Execution execution = zapiClient.getExecution(testCycle, testCase);
+            String currentStatusId = getZephyrStatusId(currentStatus);
 
-        switch (execution.getExecutionStatus()){
-            case ZAPIClient.UNEXECUTED:
-            case ZAPIClient.PASSED:
-                execution = zapiClient.udpateExecutionStatus(execution, currentStatusId);
-                break;
-            default:
-                //nothing to do
-        }
+            Execution execution = zapiClient.getExecution(testCycle, testCase);
 
-        if(!StringUtils.equals(currentStatusId, ZAPIClient.PASSED)){
-            String comment = execution.getComment();
-            if(StringUtils.isNotEmpty(comment)) {
-                comment += "\n";
+            switch (execution.getExecutionStatus()){
+                case ZAPIClient.UNEXECUTED:
+                case ZAPIClient.PASSED:
+                    execution = zapiClient.udpateExecutionStatus(execution, currentStatusId);
+                    break;
+                default:
+                    //nothing to do
             }
-            comment += currentStatus.toUpperCase();
-            if(currentExamples != null) {
-                comment += ": " + getExampleAsString(currentScenario, currentExamples) + "\n==================";
-            }
-            execution = zapiClient.udpateExecutionComment(execution, comment);
-        }
 
-        return execution;
+            if(!StringUtils.equals(currentStatusId, ZAPIClient.PASSED)){
+                String comment = execution.getComment();
+                if(StringUtils.isNotEmpty(comment)) {
+                    comment += "\n";
+                }
+                comment += currentStatus.toUpperCase();
+                if(currentExamples != null) {
+                    comment += ": " + getExampleAsString(currentScenario, currentExamples) + "\n==================";
+                }
+                execution = zapiClient.udpateExecutionComment(execution, comment);
+            }
+
+            return execution;
+        }finally {
+            zapiLock.unlock();
+        }
     }
 
     private String getExampleAsString(final Scenario scenario, final Examples exmpls) {
