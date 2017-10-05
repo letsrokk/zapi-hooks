@@ -5,6 +5,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import org.apache.commons.lang3.StringUtils;
 import org.fxclub.qa.zapi.core.*;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.json.simple.JSONArray;
@@ -13,11 +14,7 @@ import org.json.simple.JSONObject;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.MediaType;
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -25,30 +22,12 @@ import java.util.Optional;
 
 public class ZAPIClient {
 
-    public static final String FAILED = "failed";
-    public static final String PASSED = "passed";
-    public static final String SKIPPED = "skipped";
-    public static final String UNEXECUTED = "unexecuted";
-    public static final String IN_PROGRESS = "wip";
-    public static final String BLOCKED = "blocked";
-
-    private String getStatusId(String status){
-        switch (status) {
-            case PASSED:
-                return "1";
-            case FAILED:
-                return "2";
-            case IN_PROGRESS:
-                return "3";
-            case BLOCKED:
-                return "4";
-            case SKIPPED:
-            case UNEXECUTED:
-            default:
-                return "-1";
-
-        }
-    }
+    public static final String PASSED = "1";
+    public static final String FAILED = "2";
+    public static final String IN_PROGRESS = "3";
+    public static final String BLOCKED = "4";
+    public static final String SKIPPED = "-1";
+    public static final String UNEXECUTED = "-1";
 
     private String jiraUrl;
     private String username;
@@ -69,11 +48,14 @@ public class ZAPIClient {
     private HashMap<String, ProjectInfo> projects = new HashMap<>();
 
     public ProjectInfo getProjectInfo(TestCase testCase){
-        if(projects.containsKey(testCase.getProjectKey())){
-            return projects.get(testCase.getProjectKey());
-        } else {
-            return getProjectInfoBykeyOrID(testCase.getProjectKey());
-        }
+        return getProjectInfo(testCase.getProjectKey());
+    }
+
+    public ProjectInfo getProjectInfo(String projectKey){
+        return projects.computeIfAbsent(
+                projectKey,
+                this::getProjectInfoBykeyOrID
+        );
     }
 
     private ProjectInfo getProjectInfoBykeyOrID(String keyOrId) {
@@ -86,11 +68,14 @@ public class ZAPIClient {
     }
 
     public ProjectVersions getVersions(ProjectInfo projectInfo){
-        String requestUrl = jiraUrl + "rest/zapi/latest/util/versionBoard-list?projectId="+projectInfo.getId()+"&versionId=";
-        ProjectVersions versions = spec
+        return getVersions(projectInfo.getId());
+    }
+
+    public ProjectVersions getVersions(int projectId){
+        String requestUrl = jiraUrl + "rest/zapi/latest/util/versionBoard-list?projectId="+projectId+"&versionId=";
+        return spec
                 .when().get(requestUrl)
                 .then().extract().body().as(ProjectVersions.class);
-        return versions;
     }
 
     public TestCycles getCycles(ProjectInfo projectInfo, ProjectVersion projectVersion){
@@ -126,6 +111,11 @@ public class ZAPIClient {
         return testCycle;
     }
 
+    public TestCycle getTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
+        TestCycles testCycles = getCycles(projectInfo, projectVersion);
+        return testCycles.searchTestCycle(name, projectVersion);
+    }
+
     @SuppressWarnings("unchecked")
     public TestCycle createTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
         String requestUrl = jiraUrl + "rest/zapi/latest/cycle";
@@ -134,7 +124,8 @@ public class ZAPIClient {
         createCycleBody.put("clonedCycleId","");
         createCycleBody.put("name",name);
         createCycleBody.put("environment","AUTOMATION");
-        createCycleBody.put("description","Automatically generated test cycle");
+        createCycleBody.put("description","Automatically generated test cycle: "
+                + new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date()));
         String dateString = new SimpleDateFormat("d/MMM/yy").format(new Date());
         createCycleBody.put("startDate",dateString);
         createCycleBody.put("endDate",dateString);
@@ -152,24 +143,11 @@ public class ZAPIClient {
         return getTestCycleById(newCycleId);
     }
 
-    private File zapiLockFile = new File("target/zapiLockFile.txt");
+    public void deleteTestCycle(TestCycle testCycle){
+        String requestUrl = jiraUrl + "rest/zapi/latest/cycle/" + testCycle.getId();
 
-    public synchronized TestCycle getOrCreateTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion) throws IOException {
-        zapiLockFile.createNewFile();
-        FileChannel fileChannel = new RandomAccessFile(zapiLockFile, "rw").getChannel();
-        FileLock fileLock = fileChannel.lock();
-        try{
-            TestCycles testCycles = getCycles(projectInfo, projectVersion);
-            TestCycle testCycle = testCycles.searchTestCycle(name, projectVersion);
-            if(testCycle == null){
-                testCycle = createTestCycle(name, projectInfo, projectVersion);
-            }
-            return testCycle;
-        }catch (Exception e){
-            throw e;
-        } finally {
-            fileLock.release();
-        }
+        spec.expect().statusCode(200)
+                .when().delete(requestUrl);
     }
 
     @SuppressWarnings("unchecked")
@@ -216,21 +194,28 @@ public class ZAPIClient {
     }
 
     @SuppressWarnings("unchecked")
-    public Execution udpatedExecutionStatus(Execution execution, String newStatus){
+    public Execution udpateExecutionStatus(Execution execution, String newStatus){
         String requestUrl = jiraUrl + "rest/zapi/latest/execution/"+execution.getId()+"/execute";
 
-        JSONObject udpatedStatus = new JSONObject();
-        udpatedStatus.put("status",newStatus);
+        JSONObject udpatedExecution = new JSONObject();
+        udpatedExecution.put("status",newStatus);
 
         execution = spec
-                .when().with().contentType(ContentType.JSON).body(udpatedStatus.toJSONString()).put(requestUrl)
+                .when().with().contentType(ContentType.JSON).body(udpatedExecution.toJSONString()).put(requestUrl)
                 .then().extract().body().as(Execution.class);
         return  execution;
     }
 
-    public Execution udpateExecutionStatus(TestCycle testCycle, TestCase testCase, String currentStatus) {
-        Execution execution = getExecution(testCycle, testCase);
-        execution = udpatedExecutionStatus(execution, getStatusId(currentStatus));
-        return execution;
+    @SuppressWarnings("unchecked")
+    public Execution udpateExecutionComment(Execution execution, String comment){
+        String requestUrl = jiraUrl + "rest/zapi/latest/execution/"+execution.getId()+"/execute";
+
+        JSONObject udpatedExecution = new JSONObject();
+        udpatedExecution.put("comment",comment);
+
+        execution = spec
+                .when().with().contentType(ContentType.JSON).body(udpatedExecution.toJSONString()).put(requestUrl)
+                .then().extract().body().as(Execution.class);
+        return  execution;
     }
 }

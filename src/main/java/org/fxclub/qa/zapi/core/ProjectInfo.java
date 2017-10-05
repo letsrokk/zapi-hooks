@@ -34,4 +34,13 @@ public class ProjectInfo {
     public void setKey(String key) {
         this.key = key;
     }
+
+    @Override
+    public String toString() {
+        return "ProjectInfo{" +
+                "id=" + id +
+                ", self='" + self + '\'' +
+                ", key='" + key + '\'' +
+                '}';
+    }
 }

@@ -27,4 +27,11 @@ public class TestCase {
         return this.projectKey;
     }
 
+    @Override
+    public String toString() {
+        return "TestCase{" +
+                "id='" + id + '\'' +
+                ", projectKey='" + projectKey + '\'' +
+                '}';
+    }
 }

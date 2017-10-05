@@ -26,4 +26,13 @@ public class ProjectVersion {
     public int getValue() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "ProjectVersion{" +
+                "archived=" + archived +
+                ", label='" + label + '\'' +
+                ", value=" + value +
+                '}';
+    }
 }
