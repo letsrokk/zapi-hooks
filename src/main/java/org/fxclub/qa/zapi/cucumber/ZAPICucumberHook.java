@@ -97,6 +97,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
     @Override
     public void startOfScenarioLifeCycle(Scenario scenario) {
         this.currentScenario = scenario;
+        this.currentStatus = PASSED;
     }
 
     @Override
@@ -237,7 +238,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                         new StringBuilder()
                                 .append(names.get(i))
                                 .append(": [")
-                                .append(values.get(0))
+                                .append(values.get(i))
                                 .append("]")
                                 .toString()
                 );
@@ -271,7 +272,16 @@ public class ZAPICucumberHook implements Formatter, Reporter {
 
     @Override
     public void result(Result result) {
-        this.currentStatus = result.getStatus();
+        if(FAILED.equals(result.getStatus())){
+            //Set Scenario status to FAILED
+            this.currentStatus = FAILED;
+        } else if(SKIPPED.equals(result.getStatus())){
+            //Set Scenario status to SKIPPED
+            if(PASSED.equals(result.getStatus())){
+                //if scenario wasn't FAILED before
+                this.currentStatus = SKIPPED;
+            }
+        }
     }
 
     @Override
