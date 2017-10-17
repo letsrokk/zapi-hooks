@@ -124,8 +124,9 @@ public class ZAPIClient {
         createCycleBody.put("clonedCycleId","");
         createCycleBody.put("name",name);
         createCycleBody.put("environment","AUTOMATION");
-        createCycleBody.put("description","Automatically generated test cycle: "
-                + new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date()));
+        createCycleBody.put(
+                "description", name + ": " + new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date())
+        );
         String dateString = new SimpleDateFormat("d/MMM/yy").format(new Date());
         createCycleBody.put("startDate",dateString);
         createCycleBody.put("endDate",dateString);
