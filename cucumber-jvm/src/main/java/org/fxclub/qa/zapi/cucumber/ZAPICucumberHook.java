@@ -30,7 +30,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
 
     private final static Map<String,ProjectInfo> projectInfoMap = new HashMap<>();
     private final static Map<Integer,ProjectVersions> projectVersionsMap = new HashMap<>();
-    private final static Map<String,TestCycle> testCyclesMap = new HashMap<>();
+    private final static Map<String,ZephyrTestCycle> testCyclesMap = new HashMap<>();
 
     private Feature currentFeature;
     private Scenario currentScenario;
@@ -45,14 +45,14 @@ public class ZAPICucumberHook implements Formatter, Reporter {
     private String getZephyrStatusId(String cucumberStatus){
         switch (cucumberStatus) {
             case PASSED:
-                return ZAPIClient.PASSED;
+                return ZephyrStatus.PASSED.getId();
             case FAILED:
-                return ZAPIClient.FAILED;
+                return ZephyrStatus.FAILED.getId();
             case PENDING:
-                return ZAPIClient.IN_PROGRESS;
+                return ZephyrStatus.IN_PROGRESS.getId();
             case SKIPPED:
             default:
-                return ZAPIClient.SKIPPED;
+                return ZephyrStatus.UNEXECUTED.getId();
 
         }
     }
@@ -122,7 +122,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                 Matcher testCaseIDMatcher = Pattern.compile("@tmsLink=([a-zA-Z0-9-]+)").matcher(tag.getName());
                 if(testCaseIDMatcher.find()){
                     String testCaseId = testCaseIDMatcher.group(1);
-                    TestCase testCase = new TestCase(testCaseId);
+                    ZephyrTestCase testCase = new ZephyrTestCase(testCaseId);
                     logger.debug("Zephyr: Test Case: " + testCase.toString());
 
                     ProjectInfo projectInfo = getProjectInfo(testCase);
@@ -131,7 +131,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                     ProjectVersion projectVersion = getProjectVersion(projectInfo);
                     logger.debug("Zephyr: Project Version: " + projectVersion.toString());
 
-                    TestCycle testCycle = getTestCycle(projectInfo, projectVersion);
+                    ZephyrTestCycle testCycle = getTestCycle(projectInfo, projectVersion);
                     logger.debug("Zephyr: Test Cycle: " + testCycle.toString());
 
                     logger.debug("Zephyr: add " + testCase.toString() + " to " + testCycle.toString());
@@ -147,7 +147,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
         }
     }
 
-    private synchronized ProjectInfo getProjectInfo(TestCase testCase){
+    private synchronized ProjectInfo getProjectInfo(ZephyrTestCase testCase){
         return projectInfoMap.computeIfAbsent(
                 testCase.getProjectKey(),
                 projectKey -> zapiClient.getProjectInfo(projectKey)
@@ -168,7 +168,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                 .orElse(projectVersions.getUnreleasedVersions().get(0));
     }
 
-    private synchronized TestCycle getTestCycle(ProjectInfo projectInfo, ProjectVersion projectVersion){
+    private synchronized ZephyrTestCycle getTestCycle(ProjectInfo projectInfo, ProjectVersion projectVersion){
         try{
             zapiLock.lock();
 
@@ -178,7 +178,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
                         String testCycleName = Optional.ofNullable(feature).orElse(ZAPI_CYCLE_NAME_DEFAULT);
                         logger.debug(String.format("Zephyr: create test cycle with name \"%s\"", testCycleName));
 
-                        TestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
+                        ZephyrTestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
                         if(testCycle == null){
                             testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
                         } else {
@@ -197,7 +197,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
         }
     }
 
-    private synchronized Execution udpateExecutionStatus(TestCycle testCycle, TestCase testCase, String currentStatus) {
+    private synchronized Execution udpateExecutionStatus(ZephyrTestCycle testCycle, ZephyrTestCase testCase, String currentStatus) {
         try{
             zapiLock.lock();
 
@@ -205,16 +205,12 @@ public class ZAPICucumberHook implements Formatter, Reporter {
 
             Execution execution = zapiClient.getExecution(testCycle, testCase);
 
-            switch (execution.getExecutionStatus()){
-                case ZAPIClient.UNEXECUTED:
-                case ZAPIClient.PASSED:
-                    execution = zapiClient.udpateExecutionStatus(execution, currentStatusId);
-                    break;
-                default:
-                    //nothing to do
+            if (ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.UNEXECUTED
+                    || ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.PASSED){
+                execution = zapiClient.udpateExecutionStatus(execution, currentStatusId);
             }
 
-            if(!StringUtils.equals(currentStatusId, ZAPIClient.PASSED)){
+            if(!StringUtils.equals(currentStatusId, ZephyrStatus.PASSED.getId())){
                 String comment = execution.getComment();
                 if(StringUtils.isNotEmpty(comment)) {
                     comment += "\n";

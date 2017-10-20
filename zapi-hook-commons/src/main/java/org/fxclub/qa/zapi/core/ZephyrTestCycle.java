@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  */
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class TestCycle {
+public class ZephyrTestCycle {
 
     private int id;
     private String name;
@@ -26,7 +26,7 @@ public class TestCycle {
     private String createdBy;
     private String modifiedBy;
 
-    public TestCycle(){}
+    public ZephyrTestCycle(){}
 
     public int getId() {
         return id;
@@ -126,7 +126,7 @@ public class TestCycle {
 
     @Override
     public String toString() {
-        return "TestCycle{" +
+        return "ZephyrTestCycle{" +
                 "id='" + id + '\'' +
                 ", name='" + name + '\'' +
                 ", projectKey='" + projectKey + '\'' +

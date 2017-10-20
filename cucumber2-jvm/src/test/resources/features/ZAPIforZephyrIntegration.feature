@@ -1,4 +1,4 @@
-Feature: ZAPI For Zephyr Integration (CUCUMBER JVM 1.x)
+Feature: ZAPI For Zephyr Integration (CUCUMBER JVM 2.0)
 
   @tmsLink=AQA-1400
   Scenario: Successful Scenario with TMS Link

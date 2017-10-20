@@ -7,15 +7,15 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TestCycles {
+public class ZephyrTestCycles {
 
     @JsonProperty("recordsCount")
     private int recordsCount;
 
     private List<String> testCycleIds = new ArrayList<>();
-    private List<TestCycle> testCycles = new ArrayList<>();
+    private List<ZephyrTestCycle> testCycles = new ArrayList<>();
 
-    public TestCycles() {}
+    public ZephyrTestCycles() {}
 
     public void setRecordsCount(int recordsCount){
         this.recordsCount = recordsCount;
@@ -26,30 +26,30 @@ public class TestCycles {
     }
 
     @JsonAnySetter
-    public void setDynamicTestCycles(String name, TestCycle cc) {
+    public void setDynamicTestCycles(String name, ZephyrTestCycle cc) {
         testCycleIds.add(name);
         cc.setId(Integer.parseInt(name));
         testCycles.add(cc);
     }
 
-    public List<TestCycle> getTestCycles() {
+    public List<ZephyrTestCycle> getTestCycles() {
         return testCycles;
     }
 
-    public void setTestCycle(List<TestCycle> testCycles) {
+    public void setTestCycle(List<ZephyrTestCycle> testCycles) {
         this.testCycles = testCycles;
     }
 
     @Override
     public String toString() {
-        return "TestCycles{" +
+        return "ZephyrTestCycles{" +
                 "recordsCount=" + recordsCount +
                 ", testCycles=" + testCycles +
                 '}';
     }
 
-    public TestCycle searchTestCycle(String name, ProjectVersion projectVersion) {
-        for(TestCycle testCycle : testCycles){
+    public ZephyrTestCycle searchTestCycle(String name, ProjectVersion projectVersion) {
+        for(ZephyrTestCycle testCycle : testCycles){
             if(StringUtils.equals(name, testCycle.getName()) && StringUtils.equals(testCycle.getVersionName(), projectVersion.getLabel()))
                 return testCycle;
         }

@@ -5,7 +5,6 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
-import org.apache.commons.lang3.StringUtils;
 import org.fxclub.qa.zapi.core.*;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.json.simple.JSONArray;
@@ -13,21 +12,16 @@ import org.json.simple.JSONObject;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Optional;
 
 public class ZAPIClient {
-
-    public static final String PASSED = "1";
-    public static final String FAILED = "2";
-    public static final String IN_PROGRESS = "3";
-    public static final String BLOCKED = "4";
-    public static final String SKIPPED = "-1";
-    public static final String UNEXECUTED = "-1";
 
     private String jiraUrl;
     private String username;
@@ -47,7 +41,7 @@ public class ZAPIClient {
 
     private HashMap<String, ProjectInfo> projects = new HashMap<>();
 
-    public ProjectInfo getProjectInfo(TestCase testCase){
+    public ProjectInfo getProjectInfo(ZephyrTestCase testCase){
         return getProjectInfo(testCase.getProjectKey());
     }
 
@@ -78,7 +72,7 @@ public class ZAPIClient {
                 .then().extract().body().as(ProjectVersions.class);
     }
 
-    public TestCycles getCycles(ProjectInfo projectInfo, ProjectVersion projectVersion){
+    public ZephyrTestCycles getCycles(ProjectInfo projectInfo, ProjectVersion projectVersion){
         String requestUrl = jiraUrl + "rest/zapi/latest/cycle" +
                 "?projectId=" + projectInfo.getId() +
                 "&versionId=" + projectVersion.getValue();
@@ -89,20 +83,20 @@ public class ZAPIClient {
         String responseString = response.readEntity(String.class);
 
         ObjectMapper mapper = new ObjectMapper();
-        TestCycles testCycles;
+        ZephyrTestCycles testCycles;
         try {
-            testCycles = mapper.readValue(responseString, TestCycles.class);
+            testCycles = mapper.readValue(responseString, ZephyrTestCycles.class);
         } catch (IOException e) {
-            testCycles = new TestCycles();
+            testCycles = new ZephyrTestCycles();
         }
         return testCycles;
     }
 
-    public TestCycle getTestCycleById(String id){
+    public ZephyrTestCycle getTestCycleById(String id){
         String requestUrl = jiraUrl + "rest/zapi/latest/cycle/" + id;
-        TestCycle testCycle = spec
+        ZephyrTestCycle testCycle = spec
                 .when().get(requestUrl)
-                .then().extract().body().as(TestCycle.class);
+                .then().extract().body().as(ZephyrTestCycle.class);
 
         ProjectInfo projectInfo = getProjectInfoBykeyOrID(""+testCycle.getProjectId());
         testCycle.setId(Integer.parseInt(id));
@@ -111,13 +105,13 @@ public class ZAPIClient {
         return testCycle;
     }
 
-    public TestCycle getTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
-        TestCycles testCycles = getCycles(projectInfo, projectVersion);
+    public ZephyrTestCycle getTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
+        ZephyrTestCycles testCycles = getCycles(projectInfo, projectVersion);
         return testCycles.searchTestCycle(name, projectVersion);
     }
 
     @SuppressWarnings("unchecked")
-    public TestCycle createTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
+    public ZephyrTestCycle createTestCycle(String name, ProjectInfo projectInfo, ProjectVersion projectVersion){
         String requestUrl = jiraUrl + "rest/zapi/latest/cycle";
 
         JSONObject createCycleBody = new JSONObject();
@@ -144,7 +138,7 @@ public class ZAPIClient {
         return getTestCycleById(newCycleId);
     }
 
-    public void deleteTestCycle(TestCycle testCycle){
+    public void deleteTestCycle(ZephyrTestCycle testCycle){
         String requestUrl = jiraUrl + "rest/zapi/latest/cycle/" + testCycle.getId();
 
         spec.expect().statusCode(200)
@@ -152,13 +146,13 @@ public class ZAPIClient {
     }
 
     @SuppressWarnings("unchecked")
-    public void addTestsToCycle(TestCycle testCycle, TestCase... testCases) {
+    public void addTestsToCycle(ZephyrTestCycle testCycle, ZephyrTestCase... testCases) {
         String requestUrl = jiraUrl + "rest/zapi/latest/execution/addTestsToCycle/";
 
         JSONObject createCycleBody = new JSONObject();
 
         JSONArray issues = new JSONArray();
-        for(TestCase testCase : testCases)
+        for(ZephyrTestCase testCase : testCases)
             issues.add(testCase.getIssueKey());
 
         createCycleBody.put("issues",issues);
@@ -176,7 +170,7 @@ public class ZAPIClient {
     }
 
     @SuppressWarnings("unchecked")
-    public Execution getExecution(TestCycle testCycle, TestCase testCase){
+    public Execution getExecution(ZephyrTestCycle testCycle, ZephyrTestCase testCase){
         String issueId = getIssueIdByKey(testCase.getIssueKey());
         String requestUrl = jiraUrl + "rest/zapi/latest/execution";
 
@@ -218,5 +212,25 @@ public class ZAPIClient {
                 .when().with().contentType(ContentType.JSON).body(udpatedExecution.toJSONString()).put(requestUrl)
                 .then().extract().body().as(Execution.class);
         return  execution;
+    }
+
+    public void addAttachment(Execution execution, String attachment) {
+        try{
+            String requestUrl = jiraUrl + "rest/zapi/latest/attachment"
+                    + "?entityId="+execution.getId()
+                    + "&entityType=Execution";
+
+            HttpAuthenticationFeature basicAuthFeature = HttpAuthenticationFeature.basicBuilder().credentials(username, password).build();
+            Client client = ClientBuilder.newClient().register(basicAuthFeature);
+
+            Entity<String> payload = Entity.text(attachment);
+            javax.ws.rs.core.Response response = client.target(requestUrl)
+                    .request(MediaType.APPLICATION_OCTET_STREAM)
+                    .post(payload);
+
+            response.getEntity();
+        } catch (Exception | AssertionError e){
+            e.printStackTrace();
+        }
     }
 }
