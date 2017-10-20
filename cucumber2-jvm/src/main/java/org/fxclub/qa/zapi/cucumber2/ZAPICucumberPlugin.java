@@ -11,18 +11,15 @@ import gherkin.ast.Examples;
 import gherkin.ast.ScenarioDefinition;
 import gherkin.ast.ScenarioOutline;
 import gherkin.ast.TableRow;
-import gherkin.pickles.PickleTag;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.fxclub.qa.zapi.ZAPIClient;
 import org.fxclub.qa.zapi.core.*;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,9 +32,10 @@ public class ZAPICucumberPlugin implements Formatter {
     private ZAPIClient zapiClient = new ZAPIClient();
     private VersionDetector versionDetector;
 
-    private final static Map<String,ProjectInfo> projectInfoMap = new HashMap<>();
-    private final static Map<Integer,ProjectVersions> projectVersionsMap = new HashMap<>();
-    private final static Map<String,ZephyrTestCycle> testCyclesMap = new HashMap<>();
+    private final static ConcurrentHashMap<String,ProjectInfo> projectInfoMap = new ConcurrentHashMap<>();
+    private final static ConcurrentHashMap<Integer,ProjectVersions> projectVersionsMap = new ConcurrentHashMap<>();
+    private final static ConcurrentHashMap<String,ZephyrTestCycle> testCyclesMap = new ConcurrentHashMap<>();
+    private final static Object syncObjectForExecutionUpdates = new Object();
 
     private String currentFeatureName;
     private String currentScenarioName;
@@ -106,18 +104,24 @@ public class ZAPICucumberPlugin implements Formatter {
         }
     }
 
-    private synchronized ProjectInfo getProjectInfo(ZephyrTestCase testCase){
-        return projectInfoMap.computeIfAbsent(
-                testCase.getProjectKey(),
-                projectKey -> zapiClient.getProjectInfo(projectKey)
-        );
+    private ProjectInfo getProjectInfo(ZephyrTestCase testCase){
+        synchronized (projectInfoMap){
+            return projectInfoMap.computeIfAbsent(
+                    testCase.getProjectKey(),
+                    projectKey -> zapiClient.getProjectInfo(projectKey)
+            );
+        }
     }
 
-    private synchronized ProjectVersion getProjectVersion(ProjectInfo projectInfo){
-        ProjectVersions projectVersions = projectVersionsMap.computeIfAbsent(
-                projectInfo.getId(),
-                id -> zapiClient.getVersions(id)
-        );
+    private ProjectVersion getProjectVersion(ProjectInfo projectInfo){
+        ProjectVersions projectVersions;
+        synchronized (projectVersionsMap){
+            projectVersions = projectVersionsMap.computeIfAbsent(
+                    projectInfo.getId(),
+                    id -> zapiClient.getVersions(id)
+            );
+
+        }
 
         return Stream.concat(
                 projectVersions.getReleasedVersions().stream(),
@@ -128,53 +132,56 @@ public class ZAPICucumberPlugin implements Formatter {
     }
 
     private synchronized ZephyrTestCycle getTestCycle(ProjectInfo projectInfo, ProjectVersion projectVersion){
-        return testCyclesMap.computeIfAbsent(
-                currentFeatureName,
-                feature -> {
-                    String testCycleName = Optional.ofNullable(feature).orElse("CUCUMBER");
-                    logger.debug(String.format("Zephyr: create test cycle with name \"%s\"", testCycleName));
+        synchronized (testCyclesMap){
+            return testCyclesMap.computeIfAbsent(
+                    currentFeatureName,
+                    feature -> {
+                        String testCycleName = Optional.ofNullable(feature).orElse("CUCUMBER");
+                        logger.debug(String.format("Zephyr: create test cycle with name \"%s\"", testCycleName));
 
-                    ZephyrTestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
-                    if(testCycle == null){
-                        testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
-                    } else {
-                        logger.debug("Zephyr: delete existing test cycle " + testCycle.toString());
-                        zapiClient.deleteTestCycle(testCycle);
+                        ZephyrTestCycle testCycle = zapiClient.getTestCycle(testCycleName, projectInfo, projectVersion);
+                        if(testCycle == null){
+                            testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                        } else {
+                            logger.debug("Zephyr: delete existing test cycle " + testCycle.toString());
+                            zapiClient.deleteTestCycle(testCycle);
 
-                        testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                            testCycle = zapiClient.createTestCycle(testCycleName, projectInfo, projectVersion);
+                        }
+                        logger.debug("Zephyr: created new test cycle " + testCycle.toString());
+
+                        return testCycle;
                     }
-                    logger.debug("Zephyr: created new test cycle " + testCycle.toString());
-
-                    return testCycle;
-                }
-        );
+            );
+        }
     }
 
-    private synchronized Execution udpateExecutionStatus(
+    private Execution udpateExecutionStatus(
             ZephyrTestCycle testCycle,
             ZephyrTestCase testCase,
             Result currentResult
     ) {
-        ZephyrStatus zephyrCurrentStatus = ZephyrStatus.fromCucumberStatus(currentResult.getStatus().lowerCaseName());
+        synchronized (syncObjectForExecutionUpdates){
+            ZephyrStatus zephyrCurrentStatus = ZephyrStatus.fromCucumberStatus(currentResult.getStatus().lowerCaseName());
 
-        Execution execution = zapiClient.getExecution(testCycle, testCase);
+            Execution execution = zapiClient.getExecution(testCycle, testCase);
 
-        if (ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.UNEXECUTED
-                || ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.PASSED){
-            execution = zapiClient.udpateExecutionStatus(execution, zephyrCurrentStatus.getId());
-        }
-
-        if(zephyrCurrentStatus != ZephyrStatus.PASSED){
-            String comment = execution.getComment();
-            if(StringUtils.isNotEmpty(comment)) {
-                comment += "\n";
+            if (ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.UNEXECUTED
+                    || ZephyrStatus.fromId(execution.getExecutionStatus()) == ZephyrStatus.PASSED){
+                execution = zapiClient.udpateExecutionStatus(execution, zephyrCurrentStatus.getId());
             }
-            comment += currentResult.getStatus().firstLetterCapitalizedName();
-            if(StringUtils.isNotEmpty(currentScenarioParameters)) {
-                comment += ": " + currentScenarioParameters;
-            }
-            comment += "\n==================";
-            execution = zapiClient.udpateExecutionComment(execution, comment);
+
+            if(zephyrCurrentStatus != ZephyrStatus.PASSED){
+                String comment = execution.getComment();
+                if(StringUtils.isNotEmpty(comment)) {
+                    comment += "\n";
+                }
+                comment += currentResult.getStatus().firstLetterCapitalizedName();
+                if(StringUtils.isNotEmpty(currentScenarioParameters)) {
+                    comment += ": " + currentScenarioParameters;
+                }
+                comment += "\n==================";
+                execution = zapiClient.udpateExecutionComment(execution, comment);
 //            if(currentResult.getError() != null){
 //                zapiClient.addAttachment(
 //                        execution,
@@ -183,9 +190,10 @@ public class ZAPICucumberPlugin implements Formatter {
 //                                + ExceptionUtils.getStackTrace(currentResult.getError())
 //                );
 //            }
-        }
+            }
 
-        return execution;
+            return execution;
+        }
     }
 
     private String getExamplesAsParameters(final ScenarioDefinition scenarioDefinition, final int testCaseLine) {
