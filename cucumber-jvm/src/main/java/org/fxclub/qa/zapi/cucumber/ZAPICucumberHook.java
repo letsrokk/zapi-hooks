@@ -5,10 +5,10 @@ import gherkin.formatter.Reporter;
 import gherkin.formatter.model.*;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.fxclub.qa.zapi.*;
 import org.fxclub.qa.zapi.core.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.fxclub.qa.zapi.ZAPIClient;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -60,7 +60,7 @@ public class ZAPICucumberHook implements Formatter, Reporter {
     public ZAPICucumberHook(){
         try {
             versionDetector = (VersionDetector) Class.forName(
-                    System.getProperty("ZAPI_VERSION_DETECTOR","org.fxclub.qa.zapi.core.DefaultVersionDetector")
+                    System.getProperty("ZAPI_VERSION_DETECTOR","DefaultVersionDetector")
             ).newInstance();
         }catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex){
             versionDetector = new DefaultVersionDetector();

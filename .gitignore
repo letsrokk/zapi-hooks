@@ -28,7 +28,7 @@ hs_err_pid*
 
 # User-specific stuff:
 .idea/
-zapi-hooks.iml
+*.iml
 
 # Sensitive or high-churn files:
 .idea/**/dataSources/
