@@ -24,7 +24,7 @@ public class RunCucumberTests extends AbstractTestNGCucumberTests {
 }
 ```
 
-# Jira Test Cases IDs annotations for Scenarios
+# Zephyr Test Case ID annotations for Scenarios
 
 Scenarios should be annotated with `@tmsLink=PROJECT-12345`
 
