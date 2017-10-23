@@ -1,8 +1,6 @@
-# zapi-hooks
+# zapi-hooks [![Download](https://api.bintray.com/packages/letsrokk/github/zapi-hooks/images/download.svg) ](https://bintray.com/letsrokk/github/zapi-hooks/_latestVersion)
 
 Zephyr for Jira integration hooks (using ZAPI)
-
-[![Download](https://api.bintray.com/packages/letsrokk/github/zapi-hooks/images/download.svg) ](https://bintray.com/letsrokk/github/zapi-hooks/_latestVersion)
 
 # Cucumber JVM 2.0
 
