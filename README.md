@@ -108,6 +108,12 @@ and set class name as parameter `ZAPI_VERSION_DETECTOR` for test execution
 </plugin>
 ```
 
+# Important notes on parallel test execution
+
+Supported only parallel execution in threads, without forking VMs.
+
+e.g. parallel execution with `maven-surefire-plugin`: `forkCount` parameter can only be set to `0` or `1`.
+ 
 # Some examples
 
 ![Test Cycles Screen](screenshots/testCyclesScreen.png?raw=true "Test Cycles Screen")
