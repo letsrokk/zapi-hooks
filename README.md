@@ -24,7 +24,7 @@ public class RunCucumberTests extends AbstractTestNGCucumberTests {
 }
 ```
 
-# Annotation Scenarios with Jira Test Cases IDs
+# Jira Test Cases IDs annotations for Scenarios
 
 Scenarios should be annotated with `@tmsLink=PROJECT-12345`
 
