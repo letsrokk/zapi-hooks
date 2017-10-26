@@ -11,6 +11,7 @@ import gherkin.ast.Examples;
 import gherkin.ast.ScenarioDefinition;
 import gherkin.ast.ScenarioOutline;
 import gherkin.ast.TableRow;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,6 +29,9 @@ import java.util.stream.Stream;
 public class ZAPICucumberPlugin implements Formatter {
 
     private Logger logger = LogManager.getLogger(ZAPICucumberPlugin.class);
+
+    private final String testCasePattern = "@tmsLink=([a-zA-Z0-9-]+)";
+    private final String issuePattern = "@issue=([a-zA-Z0-9-]+)";
 
     private ZAPIClient zapiClient = new ZAPIClient();
     private VersionDetector versionDetector;
@@ -67,7 +71,6 @@ public class ZAPICucumberPlugin implements Formatter {
     }
 
     private void handleTestCaseFinished(final TestCaseFinished event) {
-        final String testCasePattern = "@tmsLink=([a-zA-Z0-9-]+)";
         List<String> testCaseIds = event.testCase.getTags().stream()
                 .filter(tag -> Pattern.matches(testCasePattern, tag.getName()))
                 .map(tag -> {
@@ -100,8 +103,18 @@ public class ZAPICucumberPlugin implements Formatter {
             zapiClient.addTestsToCycle(testCycle, testCase);
 
             logger.debug("Zephyr: update execution status for " + testCase.toString());
-            udpateExecutionStatus(testCycle, testCase, event.result);
+            udpateExecutionStatus(testCycle, testCase, event.result, getDefectKeysFromTags(event));
         }
+    }
+
+    private String[] getDefectKeysFromTags(TestCaseFinished event){
+        return event.testCase.getTags().stream()
+                .filter(tag -> Pattern.matches(issuePattern, tag.getName()))
+                .map(tag -> {
+                    Matcher issueMatcher = Pattern.compile(issuePattern).matcher(tag.getName());
+                    issueMatcher.find();
+                    return issueMatcher.group(1);
+                }).toArray(String[]::new);
     }
 
     private ProjectInfo getProjectInfo(ZephyrTestCase testCase){
@@ -159,7 +172,8 @@ public class ZAPICucumberPlugin implements Formatter {
     private Execution udpateExecutionStatus(
             ZephyrTestCycle testCycle,
             ZephyrTestCase testCase,
-            Result currentResult
+            Result currentResult,
+            String... defects
     ) {
         synchronized (syncObjectForExecutionUpdates){
             ZephyrStatus zephyrCurrentStatus = ZephyrStatus.fromCucumberStatus(currentResult.getStatus().lowerCaseName());
@@ -182,6 +196,11 @@ public class ZAPICucumberPlugin implements Formatter {
                 }
                 comment += "\n==================";
                 execution = zapiClient.udpateExecutionComment(execution, comment);
+
+                if(ArrayUtils.isNotEmpty(defects)) {
+                    execution = zapiClient.udpateExecutionDefectsList(execution, defects);
+                }
+
 //            if(currentResult.getError() != null){
 //                zapiClient.addAttachment(
 //                        execution,

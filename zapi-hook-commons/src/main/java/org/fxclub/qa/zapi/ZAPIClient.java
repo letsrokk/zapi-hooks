@@ -16,6 +16,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Optional;
@@ -206,6 +207,23 @@ public class ZAPIClient {
 
         JSONObject udpatedExecution = new JSONObject();
         udpatedExecution.put("comment",comment);
+
+        execution = spec
+                .when().with().contentType(ContentType.JSON).body(udpatedExecution.toJSONString()).put(requestUrl)
+                .then().extract().body().as(Execution.class);
+        return  execution;
+    }
+
+    @SuppressWarnings("unchecked")
+    public Execution udpateExecutionDefectsList(Execution execution, String... defects){
+        String requestUrl = jiraUrl + "rest/zapi/latest/execution/"+execution.getId()+"/execute";
+
+        JSONObject udpatedExecution = new JSONObject();
+        udpatedExecution.put("updateDefectList", "true");
+
+        JSONArray jsonDefects = new JSONArray();
+        jsonDefects.addAll(Arrays.asList(defects));
+        udpatedExecution.put("defectList", jsonDefects);
 
         execution = spec
                 .when().with().contentType(ContentType.JSON).body(udpatedExecution.toJSONString()).put(requestUrl)
