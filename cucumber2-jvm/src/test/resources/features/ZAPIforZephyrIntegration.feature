@@ -13,8 +13,8 @@ Feature: ZAPI For Zephyr Integration (CUCUMBER JVM 2.0)
     When action
     Then success == false
 
-  @issue=AQA-1414
-  @tmsLink=AQA-1401
+  @issue=AQA-1418
+  @tmsLink=AQA-1417
   Scenario Outline: Scenario Outline with multiple examples
     Given preconditions
     When action
